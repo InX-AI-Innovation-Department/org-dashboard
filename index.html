@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InX-AI-Innovation-Department — Org Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #0d1117; color: #c9d1d9; font-size: 14px; }
+  header { background: #161b22; border-bottom: 1px solid #30363d;
+            padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; color: #e6edf3; }
+  header .updated { margin-left: auto; color: #8b949e; font-size: 12px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+                padding: 16px; text-align: center; }
+  .stat-card .num { font-size: 32px; font-weight: 700; color: #58a6ff; }
+  .stat-card .label { color: #8b949e; margin-top: 4px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
+  .card h2 { font-size: 14px; color: #e6edf3; margin-bottom: 12px;
+              border-bottom: 1px solid #30363d; padding-bottom: 8px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; color: #8b949e; font-weight: 500;
+        padding: 6px 8px; border-bottom: 1px solid #21262d; }
+  td { padding: 8px; border-bottom: 1px solid #21262d; color: #c9d1d9;
+        max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  td a { color: #58a6ff; text-decoration: none; }
+  td a:hover { text-decoration: underline; }
+  tr:last-child td { border-bottom: none; }
+  .contrib-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .contrib-name { width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .contrib-bar-wrap { flex: 1; background: #21262d; border-radius: 4px; height: 12px; overflow: hidden; }
+  .contrib-bar { background: #238636; height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .contrib-count { width: 50px; text-align: right; color: #8b949e; }
+  .empty { color: #8b949e; font-style: italic; padding: 12px 0; }
+  @media (max-width: 768px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <svg width="24" height="24" viewBox="0 0 16 16" fill="#58a6ff">
+    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+      0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
+      -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
+      .07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15
+      -.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0
+      1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82
+      1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01
+      1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+  </svg>
+  <h1>InX-AI-Innovation-Department Org Dashboard</h1>
+  <span class="updated">更新于 2026-05-22 08:34 UTC</span>
+</header>
+
+<div class="container">
+  <div class="stats">
+    <div class="stat-card">
+      <div class="num">0</div>
+      <div class="label">Repositories</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">0</div>
+      <div class="label">Open PRs</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">0</div>
+      <div class="label">Open Issues</div>
+    </div>
+    <div class="stat-card">
+      <div class="num">0</div>
+      <div class="label">Contributors</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>Open PRs (0)</h2>
+      <p class="empty">暂无待处理 PR</p>
+    </div>
+    <div class="card">
+      <h2>Open Issues (0)</h2>
+      <p class="empty">暂无待处理 Issue</p>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h2>Repositories (0)</h2>
+      <table>
+        <thead><tr><th>名称</th><th>描述</th><th>语言</th><th>Issues</th><th>更新</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h2>Top Contributors (按 commit 数)</h2>
+      <p class="empty">暂无数据</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>
