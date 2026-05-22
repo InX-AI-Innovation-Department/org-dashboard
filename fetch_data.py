@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Fetch GitHub org data and generate index.html for GitHub Pages."""
+"""Fetch GitHub org data and generate per-repo card dashboard."""
 
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
@@ -15,193 +15,382 @@ HEADERS = {
     "Accept": "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
 }
+DEFAULT_BRANCHES = {"main", "master", "dev", "develop", "staging", "production"}
+MERGED_DAYS = 14  # show merged PRs from last N days
 
 
 def get(path, params=""):
     url = f"https://api.github.com{path}?per_page=100{params}"
     req = Request(url, headers=HEADERS)
     try:
-        with urlopen(req) as r:
+        with urlopen(req, timeout=15) as r:
             return json.loads(r.read())
     except HTTPError as e:
         print(f"HTTP {e.code} for {url}", file=sys.stderr)
+        return [] if e.code != 404 else None
+    except Exception as e:
+        print(f"Error fetching {url}: {e}", file=sys.stderr)
         return []
+
+
+def ago(iso):
+    if not iso:
+        return "—"
+    dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    diff = datetime.now(timezone.utc) - dt
+    d = diff.days
+    h = diff.seconds // 3600
+    if d == 0:
+        return f"{h} 小时前" if h > 0 else "刚刚"
+    if d == 1:
+        return "昨天"
+    if d < 30:
+        return f"{d} 天前"
+    if d < 365:
+        return f"{d // 30} 个月前"
+    return f"{d // 365} 年前"
+
+
+def fetch_repo(name):
+    cutoff = datetime.now(timezone.utc) - timedelta(days=MERGED_DAYS)
+
+    # Active branches (exclude default branches)
+    branches_raw = get(f"/repos/{ORG}/{name}/branches")
+    active_branches = [
+        b["name"] for b in (branches_raw or [])
+        if b["name"] not in DEFAULT_BRANCHES
+    ]
+
+    # Open PRs
+    open_prs = []
+    for pr in (get(f"/repos/{ORG}/{name}/pulls", "&state=open&sort=updated") or []):
+        open_prs.append({
+            "number": pr["number"],
+            "title": pr["title"],
+            "user": pr["user"]["login"],
+            "created_at": pr["created_at"],
+            "draft": pr.get("draft", False),
+            "url": pr["html_url"],
+        })
+
+    # Recently merged PRs
+    merged_prs = []
+    for pr in (get(f"/repos/{ORG}/{name}/pulls", "&state=closed&sort=updated&direction=desc") or []):
+        if not pr.get("merged_at"):
+            continue
+        merged_at = datetime.fromisoformat(pr["merged_at"].replace("Z", "+00:00"))
+        if merged_at < cutoff:
+            break
+        merged_prs.append({
+            "number": pr["number"],
+            "title": pr["title"],
+            "user": pr["user"]["login"],
+            "merged_at": pr["merged_at"],
+            "url": pr["html_url"],
+        })
+
+    # Open issues (exclude PRs)
+    open_issues = []
+    for issue in (get(f"/repos/{ORG}/{name}/issues", "&state=open&sort=updated") or []):
+        if "pull_request" not in issue:
+            open_issues.append({
+                "number": issue["number"],
+                "title": issue["title"],
+                "user": issue["user"]["login"],
+                "created_at": issue["created_at"],
+                "url": issue["html_url"],
+            })
+
+    # Latest release
+    release = get(f"/repos/{ORG}/{name}/releases/latest")
+    latest_release = None
+    if release and isinstance(release, dict) and release.get("tag_name"):
+        latest_release = {
+            "tag": release["tag_name"],
+            "name": release.get("name") or release["tag_name"],
+            "published_at": release.get("published_at", ""),
+            "url": release["html_url"],
+        }
+
+    return {
+        "active_branches": active_branches,
+        "open_prs": open_prs,
+        "merged_prs": merged_prs,
+        "open_issues": open_issues,
+        "latest_release": latest_release,
+    }
 
 
 def fetch():
     repos_raw = get(f"/orgs/{ORG}/repos", "&sort=pushed&direction=desc")
     repos = []
-    all_prs = []
-    all_issues = []
-    contributors = {}
-
-    for repo in repos_raw:
+    for repo in (repos_raw or []):
         name = repo["name"]
+        print(f"  Fetching {name}...", file=sys.stderr)
+        data = fetch_repo(name)
         repos.append({
             "name": name,
             "description": repo.get("description") or "",
-            "language": repo.get("language") or "—",
+            "language": repo.get("language") or "",
             "pushed_at": repo.get("pushed_at", ""),
-            "open_issues_count": repo.get("open_issues_count", 0),
             "html_url": repo["html_url"],
+            "default_branch": repo.get("default_branch", "main"),
+            **data,
         })
 
-        # PRs
-        prs = get(f"/repos/{ORG}/{name}/pulls", "&state=open")
-        for pr in prs:
-            all_prs.append({
-                "repo": name,
-                "number": pr["number"],
-                "title": pr["title"],
-                "user": pr["user"]["login"],
-                "created_at": pr["created_at"],
-                "html_url": pr["html_url"],
-                "draft": pr.get("draft", False),
-            })
-
-        # Issues (exclude PRs)
-        issues_raw = get(f"/repos/{ORG}/{name}/issues", "&state=open")
-        for issue in issues_raw:
-            if "pull_request" not in issue:
-                all_issues.append({
-                    "repo": name,
-                    "number": issue["number"],
-                    "title": issue["title"],
-                    "user": issue["user"]["login"],
-                    "created_at": issue["created_at"],
-                    "html_url": issue["html_url"],
-                })
-
-        # Contributors (top 10 per repo)
-        contribs = get(f"/repos/{ORG}/{name}/stats/contributors")
-        if isinstance(contribs, list):
-            for c in contribs:
-                login = c.get("author", {}).get("login", "unknown")
-                total = c.get("total", 0)
-                contributors[login] = contributors.get(login, 0) + total
-
-    top_contributors = sorted(contributors.items(), key=lambda x: -x[1])[:10]
+    total_open_prs = sum(len(r["open_prs"]) for r in repos)
+    total_open_issues = sum(len(r["open_issues"]) for r in repos)
+    total_merged = sum(len(r["merged_prs"]) for r in repos)
 
     return {
         "org": ORG,
         "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "repos": repos,
-        "open_prs": all_prs,
-        "open_issues": all_issues,
-        "contributors": [{"login": k, "commits": v} for k, v in top_contributors],
+        "summary": {
+            "repos": len(repos),
+            "open_prs": total_open_prs,
+            "open_issues": total_open_issues,
+            "merged_14d": total_merged,
+        },
     }
 
 
+def render_repo_card(repo):
+    name = repo["name"]
+    desc = repo["description"]
+    lang = repo["language"]
+    pushed = ago(repo["pushed_at"])
+    url = repo["html_url"]
+
+    # Header badge colors by language
+    lang_colors = {
+        "Python": "#3572A5", "JavaScript": "#f1e05a", "TypeScript": "#2b7489",
+        "HTML": "#e34c26", "Go": "#00ADD8", "Rust": "#dea584",
+        "Java": "#b07219", "CSS": "#563d7c", "Shell": "#89e051",
+    }
+    lang_color = lang_colors.get(lang, "#8b949e")
+
+    # Active branches
+    branches_html = ""
+    if repo["active_branches"]:
+        items = "".join(
+            f'<span class="branch-tag">{b}</span>'
+            for b in repo["active_branches"][:6]
+        )
+        extra = f'<span class="branch-more">+{len(repo["active_branches"]) - 6} more</span>' if len(repo["active_branches"]) > 6 else ""
+        branches_html = f'<div class="section-content branches">{items}{extra}</div>'
+    else:
+        branches_html = '<div class="section-content empty">无活跃功能分支</div>'
+
+    # Open PRs
+    if repo["open_prs"]:
+        rows = ""
+        for pr in repo["open_prs"][:5]:
+            draft = ' <span class="draft-badge">draft</span>' if pr["draft"] else ""
+            rows += f'''<div class="item-row">
+              <a href="{pr['url']}" target="_blank" class="item-link">
+                <span class="item-num">#{pr['number']}</span>
+                <span class="item-title">{pr['title'][:55]}{draft}</span>
+              </a>
+              <span class="item-meta">{pr['user']} · {ago(pr['created_at'])}</span>
+            </div>'''
+        extra_note = f'<div class="more-note">还有 {len(repo["open_prs"]) - 5} 个 PR...</div>' if len(repo["open_prs"]) > 5 else ""
+        open_prs_html = f'<div class="section-content">{rows}{extra_note}</div>'
+    else:
+        open_prs_html = '<div class="section-content empty">无进行中 PR</div>'
+
+    # Merged PRs (changelog)
+    if repo["merged_prs"]:
+        rows = ""
+        for pr in repo["merged_prs"][:6]:
+            rows += f'''<div class="item-row">
+              <a href="{pr['url']}" target="_blank" class="item-link">
+                <span class="item-num">#{pr['number']}</span>
+                <span class="item-title">{pr['title'][:55]}</span>
+              </a>
+              <span class="item-meta">{pr['user']} · {ago(pr['merged_at'])}</span>
+            </div>'''
+        extra_note = f'<div class="more-note">还有 {len(repo["merged_prs"]) - 6} 个...</div>' if len(repo["merged_prs"]) > 6 else ""
+        merged_html = f'<div class="section-content">{rows}{extra_note}</div>'
+    else:
+        merged_html = f'<div class="section-content empty">近 {MERGED_DAYS} 天暂无合并</div>'
+
+    # Open Issues
+    if repo["open_issues"]:
+        rows = ""
+        for issue in repo["open_issues"][:5]:
+            rows += f'''<div class="item-row">
+              <a href="{issue['url']}" target="_blank" class="item-link">
+                <span class="item-num">#{issue['number']}</span>
+                <span class="item-title">{issue['title'][:55]}</span>
+              </a>
+              <span class="item-meta">{issue['user']} · {ago(issue['created_at'])}</span>
+            </div>'''
+        extra_note = f'<div class="more-note">还有 {len(repo["open_issues"]) - 5} 个...</div>' if len(repo["open_issues"]) > 5 else ""
+        issues_html = f'<div class="section-content">{rows}{extra_note}</div>'
+    else:
+        issues_html = '<div class="section-content empty">无待处理 Issue</div>'
+
+    # Latest Release
+    if repo["latest_release"]:
+        r = repo["latest_release"]
+        release_html = f'''<div class="section-content">
+          <a href="{r['url']}" target="_blank" class="release-tag">🚀 {r['tag']}</a>
+          <span class="item-meta" style="margin-left:8px">{ago(r['published_at'])}</span>
+        </div>'''
+    else:
+        release_html = '<div class="section-content empty">暂无 Release</div>'
+
+    lang_badge = f'<span class="lang-dot" style="background:{lang_color}"></span><span class="lang-name">{lang}</span>' if lang else ""
+
+    return f'''<div class="repo-card">
+  <div class="card-header">
+    <div class="card-title-row">
+      <a href="{url}" target="_blank" class="repo-name">{name}</a>
+      {lang_badge}
+    </div>
+    {f'<div class="repo-desc">{desc}</div>' if desc else ''}
+    <div class="repo-meta">最后推送 {pushed}</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⑂</span> 活跃分支
+      <span class="count-badge">{len(repo["active_branches"])}</span>
+    </div>
+    {branches_html}
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⟳</span> 进行中
+      <span class="count-badge {'badge-warn' if len(repo['open_prs']) > 3 else ''}">{len(repo["open_prs"])}</span>
+    </div>
+    {open_prs_html}
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">✓</span> 近 {MERGED_DAYS} 天完成
+      <span class="count-badge badge-green">{len(repo["merged_prs"])}</span>
+    </div>
+    {merged_html}
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">◎</span> Issues
+      <span class="count-badge {'badge-warn' if len(repo['open_issues']) > 5 else ''}">{len(repo["open_issues"])}</span>
+    </div>
+    {issues_html}
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">↑</span> 最新 Release
+    </div>
+    {release_html}
+  </div>
+</div>'''
+
+
 def render_html(data):
-    repos_json = json.dumps(data["repos"])
-    prs_json = json.dumps(data["open_prs"])
-    issues_json = json.dumps(data["open_issues"])
-    contribs_json = json.dumps(data["contributors"])
+    s = data["summary"]
+    cards = "\n".join(render_repo_card(r) for r in data["repos"])
 
-    def ago(iso):
-        if not iso:
-            return "—"
-        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-        diff = datetime.now(timezone.utc) - dt
-        d = diff.days
-        if d == 0:
-            return "今天"
-        if d == 1:
-            return "昨天"
-        if d < 30:
-            return f"{d} 天前"
-        if d < 365:
-            return f"{d // 30} 个月前"
-        return f"{d // 365} 年前"
-
-    pr_rows = ""
-    for pr in data["open_prs"]:
-        draft = ' <span style="color:#888;font-size:11px">[draft]</span>' if pr["draft"] else ""
-        pr_rows += f"""<tr>
-          <td><a href="{pr['html_url']}" target="_blank">{pr['repo']}#{pr['number']}</a></td>
-          <td>{pr['title'][:60]}{draft}</td>
-          <td>{pr['user']}</td>
-          <td>{ago(pr['created_at'])}</td>
-        </tr>"""
-
-    issue_rows = ""
-    for issue in data["open_issues"]:
-        issue_rows += f"""<tr>
-          <td><a href="{issue['html_url']}" target="_blank">{issue['repo']}#{issue['number']}</a></td>
-          <td>{issue['title'][:60]}</td>
-          <td>{issue['user']}</td>
-          <td>{ago(issue['created_at'])}</td>
-        </tr>"""
-
-    repo_rows = ""
-    for repo in data["repos"]:
-        repo_rows += f"""<tr>
-          <td><a href="{repo['html_url']}" target="_blank">{repo['name']}</a></td>
-          <td>{repo['description'][:50] if repo['description'] else '—'}</td>
-          <td>{repo['language']}</td>
-          <td>{repo['open_issues_count']}</td>
-          <td>{ago(repo['pushed_at'])}</td>
-        </tr>"""
-
-    contrib_bars = ""
-    max_c = data["contributors"][0]["commits"] if data["contributors"] else 1
-    for c in data["contributors"]:
-        pct = int(c["commits"] / max_c * 100)
-        contrib_bars += f"""<div class="contrib-row">
-          <span class="contrib-name">{c['login']}</span>
-          <div class="contrib-bar-wrap">
-            <div class="contrib-bar" style="width:{pct}%"></div>
-          </div>
-          <span class="contrib-count">{c['commits']}</span>
-        </div>"""
-
-    return f"""<!DOCTYPE html>
+    return f'''<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{data['org']} — Org Dashboard</title>
+<title>{data['org']} — Dev Dashboard</title>
 <style>
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
   body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         background: #0d1117; color: #c9d1d9; font-size: 14px; }}
-  header {{ background: #161b22; border-bottom: 1px solid #30363d;
-            padding: 16px 24px; display: flex; align-items: center; gap: 12px; }}
-  header h1 {{ font-size: 18px; color: #e6edf3; }}
-  header .updated {{ margin-left: auto; color: #8b949e; font-size: 12px; }}
-  .container {{ max-width: 1200px; margin: 0 auto; padding: 24px; }}
-  .stats {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }}
-  .stat-card {{ background: #161b22; border: 1px solid #30363d; border-radius: 8px;
-                padding: 16px; text-align: center; }}
-  .stat-card .num {{ font-size: 32px; font-weight: 700; color: #58a6ff; }}
-  .stat-card .label {{ color: #8b949e; margin-top: 4px; }}
-  .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }}
-  .card {{ background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }}
-  .card h2 {{ font-size: 14px; color: #e6edf3; margin-bottom: 12px;
-              border-bottom: 1px solid #30363d; padding-bottom: 8px; }}
-  table {{ width: 100%; border-collapse: collapse; }}
-  th {{ text-align: left; color: #8b949e; font-weight: 500;
-        padding: 6px 8px; border-bottom: 1px solid #21262d; }}
-  td {{ padding: 8px; border-bottom: 1px solid #21262d; color: #c9d1d9;
-        max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-  td a {{ color: #58a6ff; text-decoration: none; }}
-  td a:hover {{ text-decoration: underline; }}
-  tr:last-child td {{ border-bottom: none; }}
-  .contrib-row {{ display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }}
-  .contrib-name {{ width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-  .contrib-bar-wrap {{ flex: 1; background: #21262d; border-radius: 4px; height: 12px; overflow: hidden; }}
-  .contrib-bar {{ background: #238636; height: 100%; border-radius: 4px; transition: width 0.3s; }}
-  .contrib-count {{ width: 50px; text-align: right; color: #8b949e; }}
-  .empty {{ color: #8b949e; font-style: italic; padding: 12px 0; }}
-  @media (max-width: 768px) {{
-    .stats {{ grid-template-columns: repeat(2, 1fr); }}
-    .grid-2 {{ grid-template-columns: 1fr; }}
+         background: #0d1117; color: #c9d1d9; font-size: 13px; line-height: 1.5; }}
+
+  /* Header */
+  header {{ background: #161b22; border-bottom: 1px solid #30363d; padding: 14px 24px;
+            display: flex; align-items: center; gap: 12px; }}
+  header h1 {{ font-size: 16px; color: #e6edf3; font-weight: 600; }}
+  .updated {{ margin-left: auto; color: #8b949e; font-size: 11px; }}
+
+  /* Summary bar */
+  .summary {{ display: flex; gap: 24px; padding: 14px 24px;
+              background: #161b22; border-bottom: 1px solid #30363d; }}
+  .summary-item {{ display: flex; align-items: center; gap: 6px; color: #8b949e; font-size: 12px; }}
+  .summary-item strong {{ color: #e6edf3; font-size: 15px; }}
+
+  /* Grid */
+  .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+           gap: 16px; padding: 20px 24px; max-width: 1400px; margin: 0 auto; }}
+
+  /* Repo Card */
+  .repo-card {{ background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+                overflow: hidden; display: flex; flex-direction: column; }}
+  .card-header {{ padding: 14px 16px 12px; border-bottom: 1px solid #21262d; }}
+  .card-title-row {{ display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }}
+  .repo-name {{ color: #58a6ff; font-size: 14px; font-weight: 600;
+                text-decoration: none; }}
+  .repo-name:hover {{ text-decoration: underline; }}
+  .lang-dot {{ width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+               margin-left: auto; flex-shrink: 0; }}
+  .lang-name {{ color: #8b949e; font-size: 11px; }}
+  .repo-desc {{ color: #8b949e; font-size: 12px; margin-top: 2px;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+  .repo-meta {{ color: #484f58; font-size: 11px; margin-top: 4px; }}
+
+  /* Sections */
+  .card-section {{ padding: 10px 16px; border-bottom: 1px solid #21262d; }}
+  .card-section:last-child {{ border-bottom: none; }}
+  .section-title {{ display: flex; align-items: center; gap: 5px;
+                    color: #8b949e; font-size: 11px; font-weight: 600;
+                    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }}
+  .section-icon {{ font-size: 13px; }}
+  .count-badge {{ margin-left: auto; background: #21262d; color: #8b949e;
+                  border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 600; }}
+  .count-badge.badge-green {{ background: #1a3a1f; color: #3fb950; }}
+  .count-badge.badge-warn {{ background: #3a1f1a; color: #f78166; }}
+  .section-content {{ }}
+  .section-content.empty {{ color: #484f58; font-style: italic; font-size: 12px; padding: 2px 0; }}
+
+  /* Items */
+  .item-row {{ display: flex; align-items: baseline; justify-content: space-between;
+               gap: 8px; padding: 3px 0; border-bottom: 1px solid #21262d; }}
+  .item-row:last-of-type {{ border-bottom: none; }}
+  .item-link {{ display: flex; align-items: baseline; gap: 6px;
+                color: #c9d1d9; text-decoration: none; min-width: 0; flex: 1; }}
+  .item-link:hover .item-title {{ color: #58a6ff; }}
+  .item-num {{ color: #484f58; font-size: 11px; flex-shrink: 0; }}
+  .item-title {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                 font-size: 12px; }}
+  .item-meta {{ color: #484f58; font-size: 11px; white-space: nowrap; flex-shrink: 0; }}
+  .more-note {{ color: #484f58; font-size: 11px; padding-top: 4px; }}
+  .draft-badge {{ background: #21262d; color: #8b949e; border-radius: 4px;
+                  padding: 0 4px; font-size: 10px; }}
+
+  /* Branches */
+  .branches {{ display: flex; flex-wrap: wrap; gap: 4px; }}
+  .branch-tag {{ background: #1c2128; border: 1px solid #30363d; color: #8b949e;
+                 border-radius: 12px; padding: 1px 8px; font-size: 11px;
+                 font-family: monospace; }}
+  .branch-more {{ color: #484f58; font-size: 11px; align-self: center; }}
+
+  /* Release */
+  .release-tag {{ background: #1a3a1f; color: #3fb950; border-radius: 12px;
+                  padding: 2px 10px; font-size: 12px; text-decoration: none; }}
+  .release-tag:hover {{ background: #213d25; }}
+
+  @media (max-width: 600px) {{
+    .grid {{ grid-template-columns: 1fr; padding: 12px; }}
+    .summary {{ flex-wrap: wrap; gap: 12px; }}
   }}
 </style>
 </head>
 <body>
+
 <header>
-  <svg width="24" height="24" viewBox="0 0 16 16" fill="#58a6ff">
+  <svg width="20" height="20" viewBox="0 0 16 16" fill="#58a6ff">
     <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
       0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
       -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
@@ -211,63 +400,23 @@ def render_html(data):
       1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01
       1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
   </svg>
-  <h1>{data['org']} Org Dashboard</h1>
+  <h1>{data['org']} Dev Dashboard</h1>
   <span class="updated">更新于 {data['updated_at']}</span>
 </header>
 
-<div class="container">
-  <div class="stats">
-    <div class="stat-card">
-      <div class="num">{len(data['repos'])}</div>
-      <div class="label">Repositories</div>
-    </div>
-    <div class="stat-card">
-      <div class="num">{len(data['open_prs'])}</div>
-      <div class="label">Open PRs</div>
-    </div>
-    <div class="stat-card">
-      <div class="num">{len(data['open_issues'])}</div>
-      <div class="label">Open Issues</div>
-    </div>
-    <div class="stat-card">
-      <div class="num">{len(data['contributors'])}</div>
-      <div class="label">Contributors</div>
-    </div>
-  </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <h2>Open PRs ({len(data['open_prs'])})</h2>
-      {'<p class="empty">暂无待处理 PR</p>' if not data['open_prs'] else f'''<table>
-        <thead><tr><th>PR</th><th>标题</th><th>作者</th><th>创建</th></tr></thead>
-        <tbody>{pr_rows}</tbody>
-      </table>'''}
-    </div>
-    <div class="card">
-      <h2>Open Issues ({len(data['open_issues'])})</h2>
-      {'<p class="empty">暂无待处理 Issue</p>' if not data['open_issues'] else f'''<table>
-        <thead><tr><th>Issue</th><th>标题</th><th>作者</th><th>创建</th></tr></thead>
-        <tbody>{issue_rows}</tbody>
-      </table>'''}
-    </div>
-  </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <h2>Repositories ({len(data['repos'])})</h2>
-      <table>
-        <thead><tr><th>名称</th><th>描述</th><th>语言</th><th>Issues</th><th>更新</th></tr></thead>
-        <tbody>{repo_rows}</tbody>
-      </table>
-    </div>
-    <div class="card">
-      <h2>Top Contributors (按 commit 数)</h2>
-      {contrib_bars if contrib_bars else '<p class="empty">暂无数据</p>'}
-    </div>
-  </div>
+<div class="summary">
+  <div class="summary-item"><strong>{s['repos']}</strong> Repos</div>
+  <div class="summary-item"><strong>{s['open_prs']}</strong> 进行中 PRs</div>
+  <div class="summary-item"><strong>{s['merged_14d']}</strong> 近 {MERGED_DAYS} 天已合并</div>
+  <div class="summary-item"><strong>{s['open_issues']}</strong> Open Issues</div>
 </div>
+
+<div class="grid">
+{cards}
+</div>
+
 </body>
-</html>"""
+</html>'''
 
 
 if __name__ == "__main__":
@@ -276,4 +425,9 @@ if __name__ == "__main__":
     html = render_html(data)
     with open("index.html", "w") as f:
         f.write(html)
-    print(f"Done: {len(data['repos'])} repos, {len(data['open_prs'])} PRs, {len(data['open_issues'])} issues", file=sys.stderr)
+    s = data["summary"]
+    print(
+        f"Done: {s['repos']} repos, {s['open_prs']} open PRs, "
+        f"{s['merged_14d']} merged (14d), {s['open_issues']} issues",
+        file=sys.stderr,
+    )
