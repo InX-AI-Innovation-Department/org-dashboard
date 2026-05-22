@@ -3,48 +3,94 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>InX-AI-Innovation-Department — Org Dashboard</title>
+<title>InX-AI-Innovation-Department — Dev Dashboard</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-         background: #0d1117; color: #c9d1d9; font-size: 14px; }
-  header { background: #161b22; border-bottom: 1px solid #30363d;
-            padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
-  header h1 { font-size: 18px; color: #e6edf3; }
-  header .updated { margin-left: auto; color: #8b949e; font-size: 12px; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
-  .stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
-                padding: 16px; text-align: center; }
-  .stat-card .num { font-size: 32px; font-weight: 700; color: #58a6ff; }
-  .stat-card .label { color: #8b949e; margin-top: 4px; }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; }
-  .card h2 { font-size: 14px; color: #e6edf3; margin-bottom: 12px;
-              border-bottom: 1px solid #30363d; padding-bottom: 8px; }
-  table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; color: #8b949e; font-weight: 500;
-        padding: 6px 8px; border-bottom: 1px solid #21262d; }
-  td { padding: 8px; border-bottom: 1px solid #21262d; color: #c9d1d9;
-        max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  td a { color: #58a6ff; text-decoration: none; }
-  td a:hover { text-decoration: underline; }
-  tr:last-child td { border-bottom: none; }
-  .contrib-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .contrib-name { width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .contrib-bar-wrap { flex: 1; background: #21262d; border-radius: 4px; height: 12px; overflow: hidden; }
-  .contrib-bar { background: #238636; height: 100%; border-radius: 4px; transition: width 0.3s; }
-  .contrib-count { width: 50px; text-align: right; color: #8b949e; }
-  .empty { color: #8b949e; font-style: italic; padding: 12px 0; }
-  @media (max-width: 768px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    .grid-2 { grid-template-columns: 1fr; }
+         background: #0d1117; color: #c9d1d9; font-size: 13px; line-height: 1.5; }
+
+  /* Header */
+  header { background: #161b22; border-bottom: 1px solid #30363d; padding: 14px 24px;
+            display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 16px; color: #e6edf3; font-weight: 600; }
+  .updated { margin-left: auto; color: #8b949e; font-size: 11px; }
+
+  /* Summary bar */
+  .summary { display: flex; gap: 24px; padding: 14px 24px;
+              background: #161b22; border-bottom: 1px solid #30363d; }
+  .summary-item { display: flex; align-items: center; gap: 6px; color: #8b949e; font-size: 12px; }
+  .summary-item strong { color: #e6edf3; font-size: 15px; }
+
+  /* Grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+           gap: 16px; padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+
+  /* Repo Card */
+  .repo-card { background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+                overflow: hidden; display: flex; flex-direction: column; }
+  .card-header { padding: 14px 16px 12px; border-bottom: 1px solid #21262d; }
+  .card-title-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .repo-name { color: #58a6ff; font-size: 14px; font-weight: 600;
+                text-decoration: none; }
+  .repo-name:hover { text-decoration: underline; }
+  .lang-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+               margin-left: auto; flex-shrink: 0; }
+  .lang-name { color: #8b949e; font-size: 11px; }
+  .repo-desc { color: #8b949e; font-size: 12px; margin-top: 2px;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .repo-meta { color: #484f58; font-size: 11px; margin-top: 4px; }
+
+  /* Sections */
+  .card-section { padding: 10px 16px; border-bottom: 1px solid #21262d; }
+  .card-section:last-child { border-bottom: none; }
+  .section-title { display: flex; align-items: center; gap: 5px;
+                    color: #8b949e; font-size: 11px; font-weight: 600;
+                    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  .section-icon { font-size: 13px; }
+  .count-badge { margin-left: auto; background: #21262d; color: #8b949e;
+                  border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 600; }
+  .count-badge.badge-green { background: #1a3a1f; color: #3fb950; }
+  .count-badge.badge-warn { background: #3a1f1a; color: #f78166; }
+  .section-content { }
+  .section-content.empty { color: #484f58; font-style: italic; font-size: 12px; padding: 2px 0; }
+
+  /* Items */
+  .item-row { display: flex; align-items: baseline; justify-content: space-between;
+               gap: 8px; padding: 3px 0; border-bottom: 1px solid #21262d; }
+  .item-row:last-of-type { border-bottom: none; }
+  .item-link { display: flex; align-items: baseline; gap: 6px;
+                color: #c9d1d9; text-decoration: none; min-width: 0; flex: 1; }
+  .item-link:hover .item-title { color: #58a6ff; }
+  .item-num { color: #484f58; font-size: 11px; flex-shrink: 0; }
+  .item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+                 font-size: 12px; }
+  .item-meta { color: #484f58; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+  .more-note { color: #484f58; font-size: 11px; padding-top: 4px; }
+  .draft-badge { background: #21262d; color: #8b949e; border-radius: 4px;
+                  padding: 0 4px; font-size: 10px; }
+
+  /* Branches */
+  .branches { display: flex; flex-wrap: wrap; gap: 4px; }
+  .branch-tag { background: #1c2128; border: 1px solid #30363d; color: #8b949e;
+                 border-radius: 12px; padding: 1px 8px; font-size: 11px;
+                 font-family: monospace; }
+  .branch-more { color: #484f58; font-size: 11px; align-self: center; }
+
+  /* Release */
+  .release-tag { background: #1a3a1f; color: #3fb950; border-radius: 12px;
+                  padding: 2px 10px; font-size: 12px; text-decoration: none; }
+  .release-tag:hover { background: #213d25; }
+
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; padding: 12px; }
+    .summary { flex-wrap: wrap; gap: 12px; }
   }
 </style>
 </head>
 <body>
+
 <header>
-  <svg width="24" height="24" viewBox="0 0 16 16" fill="#58a6ff">
+  <svg width="20" height="20" viewBox="0 0 16 16" fill="#58a6ff">
     <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
       0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13
       -.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66
@@ -54,84 +100,264 @@
       1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01
       1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
   </svg>
-  <h1>InX-AI-Innovation-Department Org Dashboard</h1>
-  <span class="updated">更新于 2026-05-22 09:10 UTC</span>
+  <h1>InX-AI-Innovation-Department Dev Dashboard</h1>
+  <span class="updated">更新于 2026-05-22 09:21 UTC</span>
 </header>
 
-<div class="container">
-  <div class="stats">
-    <div class="stat-card">
-      <div class="num">5</div>
-      <div class="label">Repositories</div>
+<div class="summary">
+  <div class="summary-item"><strong>5</strong> Repos</div>
+  <div class="summary-item"><strong>0</strong> 进行中 PRs</div>
+  <div class="summary-item"><strong>0</strong> 近 14 天已合并</div>
+  <div class="summary-item"><strong>0</strong> Open Issues</div>
+</div>
+
+<div class="grid">
+<div class="repo-card">
+  <div class="card-header">
+    <div class="card-title-row">
+      <a href="https://github.com/InX-AI-Innovation-Department/org-dashboard" target="_blank" class="repo-name">org-dashboard</a>
+      <span class="lang-dot" style="background:#3572A5"></span><span class="lang-name">Python</span>
     </div>
-    <div class="stat-card">
-      <div class="num">0</div>
-      <div class="label">Open PRs</div>
-    </div>
-    <div class="stat-card">
-      <div class="num">0</div>
-      <div class="label">Open Issues</div>
-    </div>
-    <div class="stat-card">
-      <div class="num">0</div>
-      <div class="label">Contributors</div>
-    </div>
+    <div class="repo-desc">GitHub Org 开发情况 Dashboard — GitHub Pages + Actions 自动更新</div>
+    <div class="repo-meta">最后推送 刚刚</div>
   </div>
 
-  <div class="grid-2">
-    <div class="card">
-      <h2>Open PRs (0)</h2>
-      <p class="empty">暂无待处理 PR</p>
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⑂</span> 活跃分支
+      <span class="count-badge">1</span>
     </div>
-    <div class="card">
-      <h2>Open Issues (0)</h2>
-      <p class="empty">暂无待处理 Issue</p>
-    </div>
+    <div class="section-content branches"><span class="branch-tag">gh-pages</span></div>
   </div>
 
-  <div class="grid-2">
-    <div class="card">
-      <h2>Repositories (5)</h2>
-      <table>
-        <thead><tr><th>名称</th><th>描述</th><th>语言</th><th>Issues</th><th>更新</th></tr></thead>
-        <tbody><tr>
-          <td><a href="https://github.com/InX-AI-Innovation-Department/org-dashboard" target="_blank">org-dashboard</a></td>
-          <td>GitHub Org 开发情况 Dashboard — GitHub Pages + Actions</td>
-          <td>Python</td>
-          <td>0</td>
-          <td>今天</td>
-        </tr><tr>
-          <td><a href="https://github.com/InX-AI-Innovation-Department/dashboard" target="_blank">dashboard</a></td>
-          <td>—</td>
-          <td>HTML</td>
-          <td>0</td>
-          <td>今天</td>
-        </tr><tr>
-          <td><a href="https://github.com/InX-AI-Innovation-Department/sspak.law" target="_blank">sspak.law</a></td>
-          <td>—</td>
-          <td>Python</td>
-          <td>0</td>
-          <td>今天</td>
-        </tr><tr>
-          <td><a href="https://github.com/InX-AI-Innovation-Department/inxai-ai-customer-support" target="_blank">inxai-ai-customer-support</a></td>
-          <td>WhatsApp AI customer support: n8n + YCloud + OpenR</td>
-          <td>Python</td>
-          <td>0</td>
-          <td>2 天前</td>
-        </tr><tr>
-          <td><a href="https://github.com/InX-AI-Innovation-Department/demo-repository" target="_blank">demo-repository</a></td>
-          <td>A code repository designed to show the best GitHub</td>
-          <td>HTML</td>
-          <td>0</td>
-          <td>9 天前</td>
-        </tr></tbody>
-      </table>
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⟳</span> 进行中
+      <span class="count-badge ">0</span>
     </div>
-    <div class="card">
-      <h2>Top Contributors (按 commit 数)</h2>
-      <p class="empty">暂无数据</p>
+    <div class="section-content empty">无进行中 PR</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">✓</span> 近 14 天完成
+      <span class="count-badge badge-green">0</span>
     </div>
+    <div class="section-content empty">近 14 天暂无合并</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">◎</span> Issues
+      <span class="count-badge ">0</span>
+    </div>
+    <div class="section-content empty">无待处理 Issue</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">↑</span> 最新 Release
+    </div>
+    <div class="section-content empty">暂无 Release</div>
   </div>
 </div>
+<div class="repo-card">
+  <div class="card-header">
+    <div class="card-title-row">
+      <a href="https://github.com/InX-AI-Innovation-Department/dashboard" target="_blank" class="repo-name">dashboard</a>
+      <span class="lang-dot" style="background:#e34c26"></span><span class="lang-name">HTML</span>
+    </div>
+    
+    <div class="repo-meta">最后推送 2 小时前</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⑂</span> 活跃分支
+      <span class="count-badge">0</span>
+    </div>
+    <div class="section-content empty">无活跃功能分支</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⟳</span> 进行中
+      <span class="count-badge ">0</span>
+    </div>
+    <div class="section-content empty">无进行中 PR</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">✓</span> 近 14 天完成
+      <span class="count-badge badge-green">0</span>
+    </div>
+    <div class="section-content empty">近 14 天暂无合并</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">◎</span> Issues
+      <span class="count-badge ">0</span>
+    </div>
+    <div class="section-content empty">无待处理 Issue</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">↑</span> 最新 Release
+    </div>
+    <div class="section-content empty">暂无 Release</div>
+  </div>
+</div>
+<div class="repo-card">
+  <div class="card-header">
+    <div class="card-title-row">
+      <a href="https://github.com/InX-AI-Innovation-Department/sspak.law" target="_blank" class="repo-name">sspak.law</a>
+      <span class="lang-dot" style="background:#3572A5"></span><span class="lang-name">Python</span>
+    </div>
+    
+    <div class="repo-meta">最后推送 6 小时前</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⑂</span> 活跃分支
+      <span class="count-badge">0</span>
+    </div>
+    <div class="section-content empty">无活跃功能分支</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⟳</span> 进行中
+      <span class="count-badge ">0</span>
+    </div>
+    <div class="section-content empty">无进行中 PR</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">✓</span> 近 14 天完成
+      <span class="count-badge badge-green">0</span>
+    </div>
+    <div class="section-content empty">近 14 天暂无合并</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">◎</span> Issues
+      <span class="count-badge ">0</span>
+    </div>
+    <div class="section-content empty">无待处理 Issue</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">↑</span> 最新 Release
+    </div>
+    <div class="section-content empty">暂无 Release</div>
+  </div>
+</div>
+<div class="repo-card">
+  <div class="card-header">
+    <div class="card-title-row">
+      <a href="https://github.com/InX-AI-Innovation-Department/inxai-ai-customer-support" target="_blank" class="repo-name">inxai-ai-customer-support</a>
+      <span class="lang-dot" style="background:#3572A5"></span><span class="lang-name">Python</span>
+    </div>
+    <div class="repo-desc">WhatsApp AI customer support: n8n + YCloud + OpenRouter (multi-tenant: PK/AR/AR2/MY)</div>
+    <div class="repo-meta">最后推送 2 天前</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⑂</span> 活跃分支
+      <span class="count-badge">0</span>
+    </div>
+    <div class="section-content empty">无活跃功能分支</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⟳</span> 进行中
+      <span class="count-badge ">0</span>
+    </div>
+    <div class="section-content empty">无进行中 PR</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">✓</span> 近 14 天完成
+      <span class="count-badge badge-green">0</span>
+    </div>
+    <div class="section-content empty">近 14 天暂无合并</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">◎</span> Issues
+      <span class="count-badge ">0</span>
+    </div>
+    <div class="section-content empty">无待处理 Issue</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">↑</span> 最新 Release
+    </div>
+    <div class="section-content empty">暂无 Release</div>
+  </div>
+</div>
+<div class="repo-card">
+  <div class="card-header">
+    <div class="card-title-row">
+      <a href="https://github.com/InX-AI-Innovation-Department/demo-repository" target="_blank" class="repo-name">demo-repository</a>
+      <span class="lang-dot" style="background:#e34c26"></span><span class="lang-name">HTML</span>
+    </div>
+    <div class="repo-desc">A code repository designed to show the best GitHub has to offer.</div>
+    <div class="repo-meta">最后推送 9 天前</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⑂</span> 活跃分支
+      <span class="count-badge">1</span>
+    </div>
+    <div class="section-content branches"><span class="branch-tag">add-badges-to-readme</span></div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">⟳</span> 进行中
+      <span class="count-badge ">0</span>
+    </div>
+    <div class="section-content empty">无进行中 PR</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">✓</span> 近 14 天完成
+      <span class="count-badge badge-green">0</span>
+    </div>
+    <div class="section-content empty">近 14 天暂无合并</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">◎</span> Issues
+      <span class="count-badge ">0</span>
+    </div>
+    <div class="section-content empty">无待处理 Issue</div>
+  </div>
+
+  <div class="card-section">
+    <div class="section-title">
+      <span class="section-icon">↑</span> 最新 Release
+    </div>
+    <div class="section-content empty">暂无 Release</div>
+  </div>
+</div>
+</div>
+
 </body>
 </html>
