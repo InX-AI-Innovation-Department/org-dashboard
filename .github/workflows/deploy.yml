@@ -1,0 +1,36 @@
+name: Build & Deploy Dashboard
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # 每小时整点运行
+  workflow_dispatch:        # 允许手动触发
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fetch data & generate HTML
+        env:
+          GITHUB_TOKEN: ${{ secrets.DASHBOARD_TOKEN }}
+          GITHUB_ORG: InX-AI-Innovation-Department
+        run: python fetch_data.py
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          publish_branch: gh-pages
+          include_files: index.html
